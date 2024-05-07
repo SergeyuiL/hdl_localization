@@ -245,7 +245,7 @@ private:
 
     // odometry-based prediction
     ros::Time last_correction_time = pose_estimator->last_correction_time();
-    if(private_nh.param<bool>("enable_robot_odometry_prediction", false) && !last_correction_time.isZero()) {
+    if(private_nh.param<bool>("enable_robot_odometry_prediction2", false) && !last_correction_time.isZero()) {
       geometry_msgs::TransformStamped odom_delta;
       if(tf_buffer.canTransform(odom_child_frame_id, last_correction_time, odom_child_frame_id, stamp, robot_odom_frame_id, ros::Duration(0.1))) {
         odom_delta = tf_buffer.lookupTransform(odom_child_frame_id, last_correction_time, odom_child_frame_id, stamp, robot_odom_frame_id, ros::Duration(0));
@@ -392,7 +392,21 @@ private:
    * @param stamp  timestamp
    * @param pose   odometry pose to be published
    */
-  void publish_odometry(const ros::Time& stamp, const Eigen::Matrix4f& pose) {
+  void publish_odometry(const ros::Time& stamp, const Eigen::Matrix4f& pose_3d) {
+    Eigen::Matrix4f pose;
+    if (ros::param::param("~project_to_2d", true)) {
+      // Project pose to x-y plane
+      double x = pose_3d(0, 3);
+      double y = pose_3d(1, 3);
+      double theta = atan2(pose_3d(1, 0), pose_3d(0, 0));
+      pose << cos(theta),  -sin(theta),  0, x,
+              sin(theta),  cos(theta),   0, y,
+              0,           0,            1, 0,
+              0,           0,            0, 1;
+    } else {
+      pose = pose_3d;
+    }
+
     // broadcast the transform over tf
     if(tf_buffer.canTransform(robot_odom_frame_id, odom_child_frame_id, ros::Time(0))) {
       geometry_msgs::TransformStamped map_wrt_frame = tf2::eigenToTransform(Eigen::Isometry3d(pose.inverse().cast<double>()));
